@@ -86,7 +86,7 @@
   - "Surprisingly, weekly inventory data adds little once you know the premium and margin, which react to refinery problems faster."
 
 ### Slide 9: The forecast, and our app (live demo)
-- **Chart:** `fig09_forecast_fan.png`, then switch to the **Streamlit app** (`streamlit run app.py`).
+- **Chart:** `fig09_forecast_fan.png`, then switch to the **Streamlit app** (`streamlit run app/app.py`).
 - **On slide:** "$6.24 → $6.17 (Nov 2) → **$5.58** (Dec 28) · 80%: $4.99–6.58 · 90%: $4.87–7.06".
 - **Speaker notes (~90s):**
   - "From $6.23, the model sees prices holding near $6.20 into mid-November, as crude's October spike offsets an over-stretched premium. Then the seasonal autumn decline takes over, toward $5.58 by late December."

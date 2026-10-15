@@ -1,7 +1,13 @@
+# Environments and caches
 .venv/
 venv/
 __pycache__/
 .ipynb_checkpoints/
 .env
 .DS_Store
+
+# Course brief (not ours to redistribute)
 Group Project 2026.pdf
+
+# data/ and outputs/ are committed on purpose so graders can see results without rerunning.
+# outputs/models/driver_model.joblib is ~15 KB, so it is committed too.

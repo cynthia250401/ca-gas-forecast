@@ -21,7 +21,7 @@ from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 from . import config as C
-from .data import FEATURES_BASE
+from .features import FEATURES_BASE
 
 H = np.array(C.HORIZONS)
 warnings.filterwarnings("ignore", module="statsmodels")

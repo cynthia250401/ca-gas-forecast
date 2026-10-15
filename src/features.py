@@ -1,11 +1,7 @@
-"""Load the EIA CSVs, profile them, and build the weekly feature panel with no look-ahead.
+"""Engineered features on the weekly Monday panel, the look-ahead check, and model_features.csv.
 
-Timing convention (everything is indexed on the Monday retail-price date T):
-  * CA / US retail prices for Monday T are known at T.
-  * Crude for Monday T is the last daily close on or before the prior Friday (T - 3 days).
-  * EIA weekly stocks / utilisation for the week ending Friday F are released the
-    following Wednesday, so they are usable from Monday F + 10. At origin T we may only
-    use observations with F <= T - 10 days.
+Every feature at Monday T uses only data published by T (see data_prep.py for the release lags);
+`check_no_lookahead` verifies this by rebuilding the panel from data truncated at sampled origins.
 """
 from __future__ import annotations
 
@@ -13,59 +9,10 @@ import numpy as np
 import pandas as pd
 
 from . import config as C
-
-
-# ----------------------------------------------------------------------------- loading
-def load_raw() -> dict[str, pd.Series]:
-    """Return {name: float Series indexed by observation date}, blanks dropped."""
-    raw = {}
-    for name, (fname, _) in C.RAW_FILES.items():
-        df = pd.read_csv(C.DATA_DIR / fname)
-        df.columns = ["date", "value"]
-        s = pd.Series(pd.to_numeric(df["value"], errors="coerce").values,
-                      index=pd.to_datetime(df["date"]), name=name).sort_index()
-        raw[name] = s.dropna()
-    return raw
-
-
-def profile(raw: dict[str, pd.Series] | None = None) -> pd.DataFrame:
-    """One row per series: coverage, frequency, gaps, range."""
-    raw = raw or load_raw()
-    rows = []
-    for name, (fname, lag) in C.RAW_FILES.items():
-        full = pd.read_csv(C.DATA_DIR / fname)
-        n_blank = pd.to_numeric(full.iloc[:, 1], errors="coerce").isna().sum()
-        s = raw[name]
-        gaps = s.index.to_series().diff().dt.days.dropna()
-        weekday = s.index.day_name().value_counts()
-        rows.append({
-            "series": name, "file": fname,
-            "start": s.index.min().date(), "end": s.index.max().date(),
-            "n_obs": len(s), "blank_rows": int(n_blank),
-            "frequency": "daily (business)" if gaps.median() == 1 else "weekly",
-            "weekday": ", ".join(weekday.index[:2]) if gaps.median() > 1 else "Mon-Fri",
-            "max_gap_days": int(gaps.max()),
-            "min": round(s.min(), 2), "max": round(s.max(), 2), "last": round(s.iloc[-1], 3),
-            "usable_lag_days": lag,
-        })
-    return pd.DataFrame(rows)
-
-
-def truncate_to_origin(raw: dict[str, pd.Series], origin) -> dict[str, pd.Series]:
-    """Keep only what was *published* by Monday `origin` (applies the release lags)."""
-    origin = pd.Timestamp(origin)
-    return {k: s[s.index <= origin - pd.Timedelta(days=C.RAW_FILES[k][1])] for k, s in raw.items()}
+from . import data_prep as D
 
 
 # ----------------------------------------------------------------------------- helpers
-def _asof(s: pd.Series, dates: pd.DatetimeIndex, lag_days: int) -> pd.Series:
-    """Value of `s` at the latest observation date <= date - lag_days."""
-    lookup = dates - pd.Timedelta(days=lag_days)
-    out = s.reindex(s.index.union(lookup)).ffill().reindex(lookup)
-    out.index = dates
-    return out
-
-
 def _years_back(k: int) -> int:
     return int(round(k * C.WEEKS_PER_YEAR))
 
@@ -106,26 +53,19 @@ def build_panel(raw: dict[str, pd.Series] | None = None, origin=None) -> pd.Data
     Columns `seas_h` hold the seasonal expectation for horizon h, `tgt_h` the realised
     log change ln(CA_{t+h}) - ln(CA_t) (NaN where not yet observed).
     """
-    raw = raw or load_raw()
+    raw = raw or D.load_raw()
     if origin is not None:
-        raw = truncate_to_origin(raw, origin)
-    ca = raw["ca"]
-    idx = ca.index
-    p = pd.DataFrame(index=idx)
-    p.index.name = "date"
-    p["ca"] = ca
-    p["us"] = raw["us"].reindex(idx)
-    p["brent"] = _asof(raw["brent"], idx, C.CRUDE_LAG_DAYS)
-    p["wti"] = _asof(raw["wti"], idx, C.CRUDE_LAG_DAYS)
+        raw = D.truncate_to_origin(raw, origin)
+    w = D.align_weekly(raw)
+    idx = w.index
+    p = w[["ca", "us", "brent", "wti", "stocks_p5", "stocks_us"]].copy()
     # EIA weekly: transform on the native Friday series, then align with the release lag
-    p["stocks_p5"] = _asof(raw["stocks_p5"], idx, C.EIA_WEEKLY_LAG_DAYS)
-    p["stocks_us"] = _asof(raw["stocks_us"], idx, C.EIA_WEEKLY_LAG_DAYS)
-    p["inv_p5_dev"] = _asof(_five_year_dev(raw["stocks_p5"]), idx, C.EIA_WEEKLY_LAG_DAYS)
-    p["inv_us_dev"] = _asof(_five_year_dev(raw["stocks_us"]), idx, C.EIA_WEEKLY_LAG_DAYS)
+    p["inv_p5_dev"] = D._asof(_five_year_dev(raw["stocks_p5"]), idx, C.EIA_WEEKLY_LAG_DAYS)
+    p["inv_us_dev"] = D._asof(_five_year_dev(raw["stocks_us"]), idx, C.EIA_WEEKLY_LAG_DAYS)
     util = raw["util_p5"]
-    p["util_p5"] = _asof(util, idx, C.EIA_WEEKLY_LAG_DAYS)
-    p["util_p5_chg_4w"] = _asof(util - util.shift(4), idx, C.EIA_WEEKLY_LAG_DAYS)
-    p["util_us"] = _asof(raw["util_us"], idx, C.EIA_WEEKLY_LAG_DAYS)
+    p["util_p5"] = w["util_p5"]
+    p["util_p5_chg_4w"] = D._asof(util - util.shift(4), idx, C.EIA_WEEKLY_LAG_DAYS)
+    p["util_us"] = w["util_us"]
 
     ly = np.log(p["ca"])
     lb = np.log(p["brent"])
@@ -159,7 +99,7 @@ def check_no_lookahead(panel: pd.DataFrame, raw: dict[str, pd.Series] | None = N
     If any feature at origin T used information published after T, the truncated rebuild
     would differ from the full-sample panel. Returns one row per origin with the max abs diff.
     """
-    raw = raw or load_raw()
+    raw = raw or D.load_raw()
     feats = FEATURES_BASE + [f"seas_{h}" for h in C.HORIZONS]
     cand = panel.index[(panel.index >= "2012-01-01")]
     rng = np.random.default_rng(seed)
@@ -175,3 +115,32 @@ def check_no_lookahead(panel: pd.DataFrame, raw: dict[str, pd.Series] | None = N
     if not out["ok"].all():
         raise AssertionError(f"Look-ahead detected:\n{out[~out.ok]}")
     return out
+
+
+def lookahead_mutation_test(raw, panel) -> bool:
+    """Sanity-check the checker: if EIA data were aligned with a 3-day lag instead of the
+    true 10-day release lag, the look-ahead check must fail."""
+    saved = C.EIA_WEEKLY_LAG_DAYS
+    try:
+        C.EIA_WEEKLY_LAG_DAYS = 3
+        leaky = build_panel(raw)
+        try:
+            check_no_lookahead(leaky, raw, n_checks=10)
+            return False
+        except AssertionError:
+            return True
+    finally:
+        C.EIA_WEEKLY_LAG_DAYS = saved
+
+
+def save_model_features(raw: dict[str, pd.Series] | None = None) -> pd.DataFrame:
+    """Write data/processed/model_features.csv (levels, features, seas_h and tgt_h)."""
+    panel = build_panel(raw)
+    C.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    panel.to_csv(C.MODEL_FEATURES_CSV)
+    return panel
+
+
+if __name__ == "__main__":
+    panel = save_model_features()
+    print(f"Wrote {C.MODEL_FEATURES_CSV.relative_to(C.ROOT)}: {panel.shape}")

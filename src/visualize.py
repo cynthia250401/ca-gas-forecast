@@ -12,7 +12,7 @@ import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap
 
 from . import config as C
-from .data import FEATURE_LABELS, FEATURES_BASE
+from .features import FEATURE_LABELS, FEATURES_BASE
 
 # ---------------------------------------------------------------- palette (validated default)
 SURF, INK, INK2, MUTED = "#fcfcfb", "#0b0b0b", "#52514e", "#898781"

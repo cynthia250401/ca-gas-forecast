@@ -3,9 +3,9 @@
 For ~20 test origins it writes a prompt containing ONLY data published by that origin
 (same release lags as the models) and asks for 1/4/8/12-week CA gasoline forecasts in JSON.
 
-    python llm_kit.py prepare [--mask-dates]   # write prompts; calls the API if ANTHROPIC_API_KEY is set
-    python llm_kit.py call                     # (re)call the API for prompts without a response
-    python llm_kit.py score                    # score whatever responses exist vs the backtest models
+    python src/llm_kit.py prepare [--mask-dates]   # write prompts; calls the API if ANTHROPIC_API_KEY is set
+    python src/llm_kit.py call                     # (re)call the API for prompts without a response
+    python src/llm_kit.py score                    # score whatever responses exist vs the backtest models
 
 Without an API key, paste each prompt in outputs/llm/prompts/ into a FRESH chat (no memory,
 no web search, no file uploads) and save the reply as outputs/llm/responses/<origin>.json
@@ -21,12 +21,18 @@ import argparse
 import json
 import os
 import re
+import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+if __package__ in (None, ""):  # allow `python src/llm_kit.py`
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from src import config as C
-from src import data as D
+from src import data_prep as D
+from src import features as F
 
 PROMPT_DIR = C.LLM_DIR / "prompts"
 RESP_DIR = C.LLM_DIR / "responses"
@@ -68,7 +74,7 @@ def _year_label(d: pd.Timestamp, T: pd.Timestamp, mask: bool) -> str:
 
 def build_prompt(raw, T: pd.Timestamp, mask_dates: bool = False) -> str:
     """Prompt from data truncated at T (publication lags applied) - nothing after T can leak."""
-    p = D.build_panel(raw, origin=T)
+    p = F.build_panel(raw, origin=T)
     assert p.index[-1] == T
     h = p.iloc[-HISTORY_WEEKS:]
     lines = ["week_monday,ca_retail_usd_gal,us_retail_usd_gal,brent_prior_fri_usd_bbl,"
@@ -103,7 +109,7 @@ with prices in $/gallon to 3 decimals.
 
 def prepare(mask_dates: bool = False) -> pd.DataFrame:
     raw = D.load_raw()
-    panel = D.build_panel(raw)
+    panel = F.build_panel(raw)
     PROMPT_DIR.mkdir(parents=True, exist_ok=True)
     RESP_DIR.mkdir(parents=True, exist_ok=True)
     o = choose_origins(panel)
@@ -136,7 +142,7 @@ def call_api(overwrite: bool = False):
                 messages=[{"role": "user", "content": path.read_text()}],
             )
         except anthropic.RateLimitError as e:
-            print(f"{path.stem}: rate limited ({e}); rerun `python llm_kit.py call` later")
+            print(f"{path.stem}: rate limited ({e}); rerun `python src/llm_kit.py call` later")
             break
         except anthropic.APIStatusError as e:
             print(f"{path.stem}: API error {e.status_code}: {e.message}")
@@ -164,11 +170,11 @@ def _parse(path) -> dict | None:
 
 
 def score() -> pd.DataFrame | None:
-    from src import evaluate as E
+    from src import backtest as E
 
     files = sorted(RESP_DIR.glob("*.json")) + sorted(RESP_DIR.glob("*.txt"))
     if not files:
-        print(f"No responses in {RESP_DIR}. Paste LLM answers there, then rerun `python llm_kit.py score`.")
+        print(f"No responses in {RESP_DIR}. Paste LLM answers there, then rerun `python src/llm_kit.py score`.")
         return None
     manifest = pd.read_csv(C.LLM_DIR / "manifest.csv", parse_dates=["origin"])
     rows = []
@@ -181,8 +187,8 @@ def score() -> pd.DataFrame | None:
         rows += [{"origin": T, "h": h, "fc_price": float(d[f"h{h}"])} for h in REPORT_H if f"h{h}" in d]
     llm = pd.DataFrame(rows).assign(model=f"LLM ({C.LLM_MODEL})")
 
-    bt = pd.read_csv(C.OUT_DIR / "backtest_forecasts.csv", parse_dates=["origin", "target_date"])
-    top = json.loads((C.OUT_DIR / "summary.json").read_text())["top_model"]
+    bt = pd.read_csv(C.FORECAST_DIR / "backtest_forecasts.csv", parse_dates=["origin", "target_date"])
+    top = json.loads((C.TABLE_DIR / "summary.json").read_text())["top_model"]
     keep = bt[bt.model.isin(COMPARE + [top]) & bt.origin.isin(llm.origin) & bt.h.isin(REPORT_H)]
     ref = keep[keep.model == "Random walk"][["origin", "h", "target_date", "origin_price", "actual_price"]]
     llm = llm.merge(ref, on=["origin", "h"], how="inner")
@@ -203,7 +209,7 @@ def score() -> pd.DataFrame | None:
     tab.round(4).to_csv(C.LLM_DIR / "llm_scores.csv", index=False)
     print(tab[["subset", "model", "h", "n", "MAE", "RMSE", "MAPE", "DirAcc", "RelRMSE", "DM_p"]]
           .round(3).to_string(index=False))
-    from src import plots as P
+    from src import visualize as P
     P.fig_llm(tab[tab.subset == "all origins"])
     return tab
 
@@ -221,7 +227,7 @@ if __name__ == "__main__":
             call_api(a.overwrite)
         else:
             print("ANTHROPIC_API_KEY not set: prompts saved. Paste each into a fresh chat and save replies "
-                  f"as {RESP_DIR}/<origin>.json, then run `python llm_kit.py score`.")
+                  f"as {RESP_DIR}/<origin>.json, then run `python src/llm_kit.py score`.")
     elif a.command == "call":
         call_api(a.overwrite)
     else:

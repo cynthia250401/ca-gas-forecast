@@ -5,10 +5,18 @@ import random
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = ROOT
-OUT_DIR = ROOT / "outputs"
-FIG_DIR = OUT_DIR / "figures"
-LLM_DIR = OUT_DIR / "llm"
+RAW_DIR = ROOT / "data" / "raw"              # original EIA CSVs, never modified
+PROCESSED_DIR = ROOT / "data" / "processed"  # weekly_panel.csv, model_features.csv
+OUTPUT_DIR = ROOT / "outputs"
+FIG_DIR = OUTPUT_DIR / "figures"
+TABLE_DIR = OUTPUT_DIR / "tables"
+FORECAST_DIR = OUTPUT_DIR / "forecasts"
+MODEL_DIR = OUTPUT_DIR / "models"
+LLM_DIR = OUTPUT_DIR / "llm"
+REPORT_DIR = ROOT / "reports"
+
+WEEKLY_PANEL_CSV = PROCESSED_DIR / "weekly_panel.csv"
+MODEL_FEATURES_CSV = PROCESSED_DIR / "model_features.csv"
 
 SEED = 42
 
@@ -42,6 +50,11 @@ SHOCKS = [
 def set_seeds(seed: int = SEED) -> None:
     random.seed(seed)
     np.random.seed(seed)
+
+
+def make_dirs() -> None:
+    for d in (PROCESSED_DIR, FIG_DIR, TABLE_DIR, FORECAST_DIR, MODEL_DIR, LLM_DIR):
+        d.mkdir(parents=True, exist_ok=True)
 
 # Raw files: name -> (filename, publication lag in days relative to the Monday origin)
 RAW_FILES = {

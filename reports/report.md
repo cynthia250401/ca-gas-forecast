@@ -56,8 +56,8 @@ UCLA Anderson MSBA · Time Series Analysis & Forecasting (Dr. William Yu) · Gro
 **Caveat.** The forecast assumes the seasonal autumn decline reasserts itself. With Brent having jumped 18% on October 2, the upside tail of the band deserves weight. Our scenario tool shows that a further +20% Brent move would leave December prices near $6.02 rather than $5.62. That figure comes from the Ridge driver model, whose baseline differs slightly from the ensemble's.
 
 **AI component.** We built both options:
-- **Option B:** an interactive **Streamlit dashboard** (`app.py`) with driver history, model and horizon pickers, backtest views, accuracy tables, the forecast fan and a Brent ±X% scenario slider.
-- **Option A:** an **LLM-forecast benchmarking kit** (`llm_kit.py`). It gives an LLM exactly the data a forecaster had at each of 20 origins and scores its answers with the same metrics. Seven of the origins fall after the model's knowledge cutoff, which controls for training-data contamination.
+- **Option B:** an interactive **Streamlit dashboard** (`app/app.py`) with driver history, model and horizon pickers, backtest views, accuracy tables, the forecast fan and a Brent ±X% scenario slider.
+- **Option A:** an **LLM-forecast benchmarking kit** (`src/llm_kit.py`). It gives an LLM exactly the data a forecaster had at each of 20 origins and scores its answers with the same metrics. Seven of the origins fall after the model's knowledge cutoff, which controls for training-data contamination.
 
 Claude Code was used as a pair programmer throughout (Section 8).
 
@@ -95,7 +95,7 @@ All data are public U.S. Energy Information Administration (EIA) series, downloa
 | PADD5 refinery utilisation | Weekly (Fri) | **Jun 2010** – Oct 2, 2026 | Limits the regression sample to mid-2010 onward |
 | US refinery utilisation | Weekly (Fri) | 1990 – Oct 2, 2026 | Shown in the app only |
 
-The full profile is in `outputs/data_profile.csv`. The weekly series have no missing weeks, and every crude blank is a holiday, which we drop.
+The full profile is in `outputs/tables/data_profile.csv`. The weekly series have no missing weeks, and every crude blank is a holiday, which we drop.
 
 ### 2.1 The weekly panel and the "no look-ahead" rule
 
@@ -123,12 +123,12 @@ All data are indexed on the **Monday retail-price date T**, which is our forecas
 
 ## 3. The story in the data
 
-![CA vs US vs crude](outputs/figures/fig01_prices_crude.png)
+![CA vs US vs crude](../outputs/figures/fig01_prices_crude.png)
 *Figure 1. CA and US retail prices with Brent expressed in $/gal (÷42), so all three share one axis. The gap between the retail and crude lines is the retail margin, which covers taxes, refining, distribution and retail.*
 
 **The 2026 crude shock.** Brent averaged $62.5 in December 2025 and $71 in February 2026. It then jumped to $96 by March 9 and peaked at $138 on April 7. California's price rose from $4.47 to $5.77 in five weeks, peaked at $5.97 in mid-May, and slid to $5.18 by early July as Brent fell back toward $70. A second surge in September took Brent from about $96 to $135 on October 2, and CA gasoline back to a new 2026 high of **$6.23**.
 
-![CA premium](outputs/figures/fig02_ca_premium.png)
+![CA premium](../outputs/figures/fig02_ca_premium.png)
 *Figure 2. California's premium over the US average.*
 
 **California's premium.** The CA–US gap averaged about **$0.20 in 2005** and **$1.31 in 2025**, and was $1.48 so far in 2026, reaching $1.87 in the latest week. It rose in steps:
@@ -137,22 +137,22 @@ All data are indexed on the **Monday retail-price date T**, which is our forecas
 
 Its spikes, such as autumn 2022 and autumn 2023, line up with West Coast refinery outages, not with crude. This is why we include the premium's deviation from its own 52-week trend as a mean-reverting feature.
 
-![Seasonality](outputs/figures/fig03_seasonal_profile.png)
+![Seasonality](../outputs/figures/fig03_seasonal_profile.png)
 *Figure 3. Average weekly log change by week of year, 2000–2021 (left), and its running sum (right).*
 
 **Seasonality.** CA prices rise in a concentrated burst from February to May, about +17–19% cumulatively, including trend. Two things drive it: spring refinery maintenance and the switch to the costlier summer blend. Prices then drift lower from October to December, when the cheaper winter blend returns and demand falls. California's spring run-up is larger than the nation's. Seasonality was the strongest signal in our first pass: a seasonal benchmark beat most of our early models. So we turned it into an explicit, leakage-free feature, the 10-year average change over the coming *h* weeks.
 
-![Margin vs crude](outputs/figures/fig04_margin_vs_crude.png)
+![Margin vs crude](../outputs/figures/fig04_margin_vs_crude.png)
 *Figure 4. Retail-minus-crude margin (left) and its 4-week change against Brent's 4-week change (right).*
 
 **Pass-through is lagged.** When Brent jumps, the margin is squeezed first, because the pump price lags crude. Each 1% crude move compresses the margin by about 0.4¢ over four weeks, and the margin is rebuilt in the following weeks ("rockets and feathers"). As a result, a wide margin today predicts falling prices, and a squeezed margin predicts rising prices. The margin deviation has a −0.37 correlation with the next 4-week change (Figure 6).
 
-![Inventories](outputs/figures/fig05_inventory_vs_price.png)
+![Inventories](../outputs/figures/fig05_inventory_vs_price.png)
 *Figure 5. West Coast inventory deviation (as published at the origin) against the following 4-week CA price change.*
 
 **Inventories carry a weak signal.** We expected tight inventories to predict rising prices. The relationship is weak (correlation 0.17) and, at the extremes, runs the other way: the tightest-stock weeks were followed by declines, as the outages that drained stocks were resolved. Part of the correlation is also seasonal, because stocks are seasonally high just before the spring run-up. We keep the feature for completeness, but it ranks low in importance (Figure 10).
 
-![Correlations](outputs/figures/fig06_feature_correlation.png)
+![Correlations](../outputs/figures/fig06_feature_correlation.png)
 *Figure 6. Feature correlations, 2010–2021. The bottom row is correlation with the realised 4-week-ahead CA change.*
 
 ## 4. Methods
@@ -166,7 +166,7 @@ All models forecast the **log change** from the origin price for h = 1…12, whi
 | **Random walk** | ŷ(T+h) = y(T) | The benchmark every forecaster must beat |
 | **Seasonal naive** | y(T) + [y(T−52+h) − y(T−52)], last year's change over the same weeks | Classic seasonal benchmark, applied to changes because the level trends |
 | **Seasonal mean (10y)** | y(T) + `seas_h` | Averages ten seasons, which is much less noisy than one |
-| **ARIMA(3,1,2)** | Log price. Order chosen by AIC over p, q ≤ 3, with and without drift, **on data to Dec 2021 only** (`outputs/arima_order_selection.csv`) | Standard univariate time-series model |
+| **ARIMA(3,1,2)** | Log price. Order chosen by AIC over p, q ≤ 3, with and without drift, **on data to Dec 2021 only** (`outputs/tables/arima_order_selection.csv`) | Standard univariate time-series model |
 | **ETS damped** | Holt additive damped trend on log price | Exponential-smoothing benchmark |
 | **Ridge** / **Ridge + seasonal** | One regression per horizon (*direct* strategy) on the features, standardised, with α chosen by RidgeCV | Interpretable driver model; also powers the scenario tool |
 | **GBM** / **GBM + seasonal** | Gradient boosting, one model per horizon: 250 trees, depth 2, learning rate 0.03, subsample 0.8, seed 42 | Captures non-linear effects, e.g. the margin squeeze only mattering when large |
@@ -210,11 +210,11 @@ All models forecast the **log change** from the origin price for h = 1…12, whi
 | ETS damped | 1.086 | 1.013 |
 | Seasonal naive | 1.109 | 0.937 |
 
-*Averages over h = 1, 4, 8, 12 (`outputs/model_ranking.csv`).*
+*Averages over h = 1, 4, 8, 12 (`outputs/tables/model_ranking.csv`).*
 
 The ML ensemble ranks first on validation and is therefore our top model. On the holdout its average is essentially tied with the much simpler 10-year seasonal mean (0.837 vs 0.833), and both are far ahead of ARIMA, ETS and the seasonal naive. The top model's advantage is concentrated at short horizons: at h = 1 its RMSE is 0.81× the random walk's, against 0.92× for the seasonal mean. The seasonal mean is slightly better at 8–12 weeks.
 
-![Error by horizon](outputs/figures/fig07_error_by_horizon.png)
+![Error by horizon](../outputs/figures/fig07_error_by_horizon.png)
 *Figure 7. RMSE relative to the random walk by horizon, for all 13 models (grey) with key models highlighted.*
 
 **What the backtest says about each model family:**
@@ -236,7 +236,7 @@ The ML ensemble ranks first on validation and is therefore our top model. On the
 
 **Interpreting the DM tests.** The top model is better than the random walk at every horizon, and its validation-period DM p-values were 0.000 at h = 1, 0.013 at h = 4 and 0.08 at h = 8 and 12. On the holdout alone, only h = 1 is significant at 5%. A 21-month holdout contains only about 90 heavily overlapping 12-week errors, so the test has little power. Across validation and holdout, the improvement is consistent in direction and similar in size (15–25% vs 11–19% RMSE reduction).
 
-![Backtest](outputs/figures/fig08_backtest_top_model.png)
+![Backtest](../outputs/figures/fig08_backtest_top_model.png)
 *Figure 8. Backtest of the top model at 4 and 12 weeks ahead, plotted at the target date, against the actual price and the random walk.*
 
 Figure 8 shows the model's character. It anticipates the spring run-ups and autumn declines that the random walk misses, for example in 2023–25. But like every model, it cannot foresee the *onset* of a crude shock: March 2022 and March 2026 are missed at 12 weeks. It also overshoots the mean reversion after the May 2026 peak.
@@ -251,7 +251,7 @@ Figure 8 shows the model's character. It anticipates the spring run-ups and autu
 | ARIMA(3,1,2) | 0.97 / 1.05 | 0.96 / 0.92 | 0.92 / 0.98 |
 | ETS damped | 1.11 / 1.47 | 1.08 / 1.11 | 0.98 / 1.11 |
 
-![Regimes](outputs/figures/fig11_regimes.png)
+![Regimes](../outputs/figures/fig11_regimes.png)
 *Figure 11. Accuracy by regime at the 4-week horizon.*
 
 - **Normal times (2023–25).** The driver-based ensemble shines here, cutting 12-week RMSE by 26%. Its 4-week MAE in 2023–25 was 15¢/gal.
@@ -259,7 +259,7 @@ Figure 8 shows the model's character. It anticipates the spring run-ups and autu
 
 ### 5.4 Final 12-week forecast
 
-![Fan chart](outputs/figures/fig09_forecast_fan.png)
+![Fan chart](../outputs/figures/fig09_forecast_fan.png)
 *Figure 9. The 12-week forecast from October 5, 2026, with empirical 80% and 90% bands. Every other model's path is shown in grey.*
 
 | Week of | Forecast | 80% interval | 90% interval |
@@ -272,7 +272,7 @@ Figure 8 shows the model's character. It anticipates the spring run-ups and autu
 | Dec 14 | $5.66 | $5.13–6.66 | $4.86–6.96 |
 | Dec 28 | **$5.58** | $4.99–6.58 | $4.87–7.06 |
 
-*Full table: `outputs/final_forecast_top_model.csv`.*
+*Full table: `outputs/forecasts/final_forecast_top_model.csv`.*
 
 **Reading the forecast.**
 - **Through mid-November:** the model expects prices to hold at about $6.20. Brent's October 2 jump to $135 (+17% on the week, +82% over 12 weeks) pushes up, while an unusually wide CA premium ($1.87 vs a 52-week norm of $1.45) and the start of the autumn seasonal decline push down.
@@ -283,7 +283,7 @@ Figure 8 shows the model's character. It anticipates the spring run-ups and autu
 
 ## 6. What drives California gasoline prices?
 
-![Drivers](outputs/figures/fig10_feature_importance.png)
+![Drivers](../outputs/figures/fig10_feature_importance.png)
 *Figure 10. Ridge + seasonal standardised coefficients by horizon (left), and GBM + seasonal feature importance (right). Both are fitted on all data to the latest week.*
 
 Both the linear and the tree model tell the same story:
@@ -317,8 +317,8 @@ About half of a crude move reaches the pump within a month and about three-quart
 | Tool | Role |
 |---|---|
 | **Claude Code (Claude Opus 5.5)** | Pair programmer. It read the assignment brief and profiled the data, then implemented the pipeline in `src/`: the panel and the look-ahead test, the models, the backtest, the DM tests, the figures, the Streamlit app and the LLM kit. It also ran everything end to end and fixed errors. |
-| **Streamlit app** (`app.py`, **Option B**) | Turns the analysis into a product: driver selector, model and horizon pickers, backtest viewer, accuracy table, forecast fan and a Brent scenario slider |
-| **LLM forecast kit** (`llm_kit.py`, **Option A**) | Benchmarks an LLM *as a forecaster* against our models (below) |
+| **Streamlit app** (`app/app.py`, **Option B**) | Turns the analysis into a product: driver selector, model and horizon pickers, backtest viewer, accuracy table, forecast fan and a Brent scenario slider |
+| **LLM forecast kit** (`src/llm_kit.py`, **Option A**) | Benchmarks an LLM *as a forecaster* against our models (below) |
 
 **How we kept AI output honest.**
 - We did not accept AI-generated code or claims uncritically. The look-ahead property is verified by an automated test, and the test itself is verified with a deliberately injected leak.
@@ -337,13 +337,13 @@ About half of a crude move reaches the pump within a month and about three-quart
   - A `--mask-dates` option relabels years (Y0, Y−1…) to make memorised prices harder to retrieve.
 - **Scoring:** answers are scored with exactly the same metrics and DM tests as our models, at the same origins, against the random walk, seasonal mean, ARIMA and the top model (`outputs/llm/llm_scores.csv`, Figure 12 once responses exist).
 
-> **Status:** prompts for all 20 origins are in `outputs/llm/prompts/`. *[Team: paste the LLM results table and Figure 12 here after running `python llm_kit.py score`.]*
+> **Status:** prompts for all 20 origins are in `outputs/llm/prompts/`. *[Team: paste the LLM results table and Figure 12 here after running `python src/llm_kit.py score`.]*
 
 ---
 
 ### Reproducibility
 
-`python analysis.py` regenerates every table and figure in about 4 minutes. `project.ipynb` runs the same steps with commentary, and `streamlit run app.py` launches the dashboard. Seeds are fixed (42). All outputs are in `outputs/`.
+`python src/run_all.py` (from the repo root) rebuilds `data/processed/` from the raw EIA files in `data/raw/` and regenerates every table, forecast and figure in about 5 minutes. `notebooks/project.ipynb` runs the same steps with commentary, and `streamlit run app/app.py` launches the dashboard. Seeds are fixed (42). Outputs are in `outputs/` (`figures/`, `tables/`, `forecasts/`, `models/`, `llm/`).
 
 ### References
 - U.S. Energy Information Administration: *Weekly Retail Gasoline and Diesel Prices*; *Spot Prices for Crude Oil*; *Weekly Petroleum Status Report* (stocks, refinery utilisation).

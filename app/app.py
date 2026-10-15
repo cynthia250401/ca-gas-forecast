@@ -1,13 +1,15 @@
 """California gasoline forecasting dashboard (Option B).
 
-    streamlit run app.py
+    streamlit run app/app.py        # from the repo root
 
-Reads the outputs written by `python analysis.py`; the Brent scenario re-uses the fitted
-Ridge driver model (outputs/driver_model.joblib).
+Reads data/processed/ and outputs/ written by `python src/run_all.py`; the Brent scenario
+re-uses the fitted Ridge driver model (outputs/models/driver_model.joblib).
 """
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -16,9 +18,11 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # repo root, so `src` imports work
+
+from src import backtest as E
 from src import config as C
-from src import evaluate as E
-from src.scenario import brent_scenario
+from src.forecast import brent_scenario
 
 st.set_page_config(page_title="CA Gasoline Forecast", page_icon="⛽", layout="wide")
 
@@ -44,24 +48,24 @@ def style(fig, height=420, ytitle=None):
 
 @st.cache_data
 def load():
-    o = C.OUT_DIR
-    panel = pd.read_csv(o / "panel.csv", index_col=0, parse_dates=True)
-    bt = pd.read_csv(o / "backtest_forecasts.csv", parse_dates=["origin", "target_date"])
-    final = pd.read_csv(o / "final_forecast_all_models.csv", parse_dates=["origin", "target_date"])
-    fan = pd.read_csv(o / "final_forecast_top_model.csv", parse_dates=["origin", "target_date"])
-    summary = json.loads((o / "summary.json").read_text())
+    f = C.FORECAST_DIR
+    panel = pd.read_csv(C.MODEL_FEATURES_CSV, index_col=0, parse_dates=True)
+    bt = pd.read_csv(f / "backtest_forecasts.csv", parse_dates=["origin", "target_date"])
+    final = pd.read_csv(f / "final_forecast_all_models.csv", parse_dates=["origin", "target_date"])
+    fan = pd.read_csv(f / "final_forecast_top_model.csv", parse_dates=["origin", "target_date"])
+    summary = json.loads((C.TABLE_DIR / "summary.json").read_text())
     return panel, bt, final, fan, summary
 
 
 @st.cache_resource
 def load_driver():
-    return joblib.load(C.OUT_DIR / "driver_model.joblib")
+    return joblib.load(C.MODEL_DIR / "driver_model.joblib")
 
 
 try:
     panel, bt, final, fan, summary = load()
 except FileNotFoundError:
-    st.error("Outputs not found. Run `python analysis.py` first, then reload this page.")
+    st.error("Outputs not found. Run `python src/run_all.py` first, then reload this page.")
     st.stop()
 
 TOP = summary["top_model"]
@@ -232,6 +236,6 @@ seasonal-expectation feature), and four equal-weight ensembles.
 **Validation.** Weekly rolling origins from Jan 2022, expanding window, refit every 4 weeks. Model chosen on
 2022–24 targets; 2025–26 is an untouched holdout.
 
-**AI use.** Claude Code helped write the pipeline, tests and this app; `llm_kit.py` benchmarks an LLM's own
+**AI use.** Claude Code helped write the pipeline, tests and this app; `src/llm_kit.py` benchmarks an LLM's own
 forecasts against these models with leakage controls (Option A).
 """)
