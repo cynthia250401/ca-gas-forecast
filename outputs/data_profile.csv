@@ -1,0 +1,9 @@
+series,file,start,end,n_obs,blank_rows,frequency,weekday,max_gap_days,min,max,last,usable_lag_days
+ca,ca_gas.csv,2000-05-22,2026-10-05,1377,0,weekly,Monday,7,1.1,6.27,6.227,0
+us,us_gas.csv,2000-01-03,2026-10-05,1397,0,weekly,Monday,7,1.06,5.01,4.354,0
+brent,brent.csv,2000-01-04,2026-10-06,6481,500,daily (business),Mon-Fri,11,9.12,143.95,125.44,3
+wti,wti.csv,2000-01-04,2026-10-06,6332,649,daily (business),Mon-Fri,8,-36.98,145.31,96.24,3
+stocks_p5,gas_stocks_padd5.csv,1990-01-05,2026-10-02,1918,0,weekly,Friday,7,23876.0,36779.0,27856.0,10
+stocks_us,gas_stocks_us.csv,1990-01-05,2026-10-02,1918,0,weekly,Friday,7,178739.0,263234.0,204744.0,10
+util_p5,refinery_util_padd5.csv,2010-06-04,2026-10-02,853,0,weekly,Friday,7,58.7,99.2,95.2,10
+util_us,refinery_util_us.csv,1990-11-02,2026-10-02,1875,0,weekly,Friday,7,56.0,100.5,92.7,10

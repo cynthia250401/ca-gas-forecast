@@ -1,0 +1,7 @@
+.venv/
+venv/
+__pycache__/
+.ipynb_checkpoints/
+.env
+.DS_Store
+Group Project 2026.pdf

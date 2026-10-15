@@ -1,0 +1,15 @@
+# Tested with Python 3.14
+pandas==3.0.6
+numpy==2.5.4
+scipy==1.18.1
+statsmodels==0.15.0
+scikit-learn==1.9.1
+joblib==1.6.0
+matplotlib==3.11.2
+plotly==7.1.0
+streamlit==1.66.0
+anthropic==1.15.0        # only needed for llm_kit.py API calls
+jupyter==1.1.1
+ipykernel==7.4.0
+nbformat==5.11.1
+nbconvert==7.17.2
